@@ -191,6 +191,34 @@ def filter_language_dutch(ctx: LexisContext) -> None:
     sleep(3)
 
 
+def filter_term_traffic_accidents(ctx: LexisContext) -> None:
+    """Apply 'Traffic Accidents' filter in the Zoekwoord (term) accordion."""
+    driver = ctx.driver
+    wait = WebDriverWait(driver, 20)
+
+    # Expand the Zoekwoord accordion if it's collapsed
+    term_trigger = wait.until(
+        EC.presence_of_element_located(
+            (By.CSS_SELECTOR, "button[data-filtertype='term']")
+        )
+    )
+    if "collapsed" in (term_trigger.get_attribute("class") or ""):
+        term_trigger.click()
+
+    # Click the label for the Traffic Accidents checkbox
+    traffic_label = wait.until(
+        EC.element_to_be_clickable(
+            (
+                By.XPATH,
+                "//ul[@data-id='term']//label[.//span[normalize-space()='Traffic Accidents']]",
+            )
+        )
+    )
+    traffic_label.click()
+
+    sleep(3)
+
+
 def filter_single_day(ctx: LexisContext, day: date) -> None:
     """Apply a date filter for a single day on the current results page."""
     driver = ctx.driver
@@ -556,6 +584,7 @@ def main() -> None:
     ctx = create_lexis_context()
     open_lexis_page(ctx)
     filter_language_dutch(ctx)
+    filter_term_traffic_accidents(ctx)
     iterate_results_for_range(ctx, start_date, end_date)
 
 
