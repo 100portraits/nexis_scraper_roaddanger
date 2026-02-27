@@ -21,7 +21,7 @@ from selenium.common.exceptions import TimeoutException
 
 LEXIS_URL = "https://lib.uva.nl/discovery/fulldisplay/alma990037746580205131/31UKB_UAM1_INST:UVA"
 SEARCH_QUERY = (
-    "(verkeersongeval or aanrijding or ongeluk or crash or botsing or verkeersongeluk)"
+    "(HLEAD(verkeersongeval OR verkeersongeluk OR aanrijding OR botsing OR aangereden OR geschept) OR BODY( (verkeer! OR kruispunt OR snelweg OR fietspad OR oversteek! OR rotonde OR rijbaan) w/15 (ongeval OR ongeluk OR botsing OR aanrijding OR gewond! OR omgekomen OR dodelijk OR slachtoffer) ) ) AND NOT (vliegtuig! OR luchtvaart! OR beurs)"
 )
 PROGRESS_CSV = Path("progress.csv")
 DOWNLOAD_ROOT = Path(__file__).parent / "downloads"
