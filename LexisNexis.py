@@ -270,6 +270,7 @@ def filter_single_day(ctx: LexisContext, day: date) -> None:
 
 
 DOWNLOAD_LIMIT = 250
+DAILY_DOWNLOAD_LIMIT = 2500
 
 
 def update_progress_for_day(
@@ -279,12 +280,12 @@ def update_progress_for_day(
     num_downloaded: int,
     time_taken: float,
 ) -> None:
-    """Update or append a row for the given day in progress.csv, if it exists."""
+    """Update or append a row for the given day in progress.csv."""
     if not PROGRESS_CSV.exists():
         return
 
     rows: list[dict[str, str]] = []
-    fieldnames = ["date", "completed", "num_docs", "num_downloaded", "time_taken"]
+    fieldnames = ["date", "completed", "num_docs", "num_downloaded", "time_taken", "date_scraped"]
 
     with PROGRESS_CSV.open(newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
@@ -294,6 +295,7 @@ def update_progress_for_day(
             rows.append(row)
 
     day_key = day.strftime("%d-%m-%Y")
+    scraped_today = date.today().strftime("%d-%m-%Y")
     updated = False
     for row in rows:
         if row.get("date") == day_key:
@@ -301,6 +303,7 @@ def update_progress_for_day(
             row["num_docs"] = str(num_docs)
             row["num_downloaded"] = str(num_downloaded)
             row["time_taken"] = f"{time_taken:.2f}"
+            row["date_scraped"] = scraped_today
             updated = True
             break
 
@@ -312,6 +315,7 @@ def update_progress_for_day(
                 "num_docs": str(num_docs),
                 "num_downloaded": str(num_downloaded),
                 "time_taken": f"{time_taken:.2f}",
+                "date_scraped": scraped_today,
             }
         )
 
@@ -321,12 +325,8 @@ def update_progress_for_day(
         writer.writerows(rows)
 
 
-def download_all_documents_for_current_results(ctx: LexisContext) -> tuple[int, int]:
-    """
-    For the current results page, batch-download the first content type's documents
-    in chunks of at most DOWNLOAD_LIMIT.
-    Prints a single boolean indicating whether the total count exceeds the limit.
-    """
+def get_result_count(ctx: LexisContext) -> int:
+    """Read the document count from the current filtered results page."""
     driver = ctx.driver
     wait = WebDriverWait(driver, 20)
 
@@ -337,12 +337,21 @@ def download_all_documents_for_current_results(ctx: LexisContext) -> tuple[int, 
     )
     count_raw = first_tab.get_attribute("data-actualresultscount") or "0"
     try:
-        count_int = int(count_raw.replace(".", "").replace("+", "").strip())
+        return int(count_raw.replace(".", "").replace("+", "").strip())
     except ValueError:
-        count_int = 0
+        return 0
 
+
+def download_all_documents_for_current_results(ctx: LexisContext, count_int: int) -> tuple[int, int]:
+    """
+    For the current results page, batch-download the first content type's documents
+    in chunks of at most DOWNLOAD_LIMIT.
+    """
     if count_int == 0:
         return 0, 0
+
+    driver = ctx.driver
+    wait = WebDriverWait(driver, 20)
 
     total_downloaded = 0
     start_idx = 1
@@ -521,6 +530,23 @@ def get_completed_days() -> set[date]:
     return completed
 
 
+def get_downloaded_today() -> int:
+    """Sum num_downloaded for all rows where date_scraped matches today."""
+    if not PROGRESS_CSV.exists():
+        return 0
+
+    today_str = date.today().strftime("%d-%m-%Y")
+    total = 0
+    with PROGRESS_CSV.open(newline="", encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            if row.get("date_scraped", "").strip() == today_str:
+                try:
+                    total += int(row.get("num_downloaded", "0"))
+                except ValueError:
+                    continue
+    return total
+
+
 def prompt_skip_completed(completed_in_range: list[date]) -> set[date]:
     """Show already-completed days and ask the user whether to skip them."""
     print("\nThe following days are already marked as completed:")
@@ -552,7 +578,21 @@ def iterate_results_for_range(
 
         day_start = monotonic()
         filter_single_day(ctx, current)
-        num_docs, num_downloaded = download_all_documents_for_current_results(ctx)
+
+        num_docs = get_result_count(ctx)
+        already_today = get_downloaded_today()
+        if already_today + num_docs > DAILY_DOWNLOAD_LIMIT:
+            remaining = DAILY_DOWNLOAD_LIMIT - already_today
+            print(
+                f"\nDaily download limit reached!"
+                f"\n  Already downloaded today: {already_today}"
+                f"\n  Documents for {current.strftime('%d-%m-%Y')}: {num_docs}"
+                f"\n  Limit: {DAILY_DOWNLOAD_LIMIT} (room for {remaining} more)"
+                f"\n\nPlease wait until tomorrow to continue scraping."
+            )
+            return
+
+        num_docs, num_downloaded = download_all_documents_for_current_results(ctx, num_docs)
         elapsed = monotonic() - day_start
 
         after_files = {
