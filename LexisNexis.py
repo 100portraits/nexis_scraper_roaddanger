@@ -505,11 +505,46 @@ def set_download_modal_settings(ctx: LexisContext, start_idx: int, end_idx: int)
         pass
 
 
-def iterate_results_for_range(ctx: LexisContext, start: date, end: date) -> None:
+def get_completed_days() -> set[date]:
+    """Read progress.csv and return the set of dates marked as completed."""
+    completed: set[date] = set()
+    if not PROGRESS_CSV.exists():
+        return completed
+
+    with PROGRESS_CSV.open(newline="", encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            if row.get("completed", "").strip() == "True":
+                try:
+                    completed.add(datetime.strptime(row["date"], "%d-%m-%Y").date())
+                except (ValueError, KeyError):
+                    continue
+    return completed
+
+
+def prompt_skip_completed(completed_in_range: list[date]) -> set[date]:
+    """Show already-completed days and ask the user whether to skip them."""
+    print("\nThe following days are already marked as completed:")
+    for d in completed_in_range:
+        print(f"  {d.strftime('%d-%m-%Y')}")
+
+    answer = input("\nDo you want to skip these days? (y/n): ").strip().lower()
+    if answer == "y":
+        return set(completed_in_range)
+    return set()
+
+
+def iterate_results_for_range(
+    ctx: LexisContext, start: date, end: date, skip: set[date] | None = None,
+) -> None:
     """Loop from start to end (inclusive), filtering one day at a time."""
+    skip = skip or set()
     current = start
 
     while current <= end:
+        if current in skip:
+            print(f"Skipping {current.strftime('%d-%m-%Y')} (already completed)")
+            current += date.resolution
+            continue
         # Track downloads created during this day so we can move them to a per-day folder
         before_files = {
             p for p in DOWNLOAD_ROOT.glob("*") if p.is_file()
@@ -581,11 +616,25 @@ def main() -> None:
     if end_date < start_date:
         raise SystemExit("end-date must be on or after start-date")
 
+    completed = get_completed_days()
+    completed_in_range = sorted(
+        d for d in completed if start_date <= d <= end_date
+    )
+
+    skip: set[date] = set()
+    if completed_in_range:
+        skip = prompt_skip_completed(completed_in_range)
+
+    total_days = (end_date - start_date).days + 1
+    if len(skip) >= total_days:
+        print("All days in the requested range are already completed. Nothing to do.")
+        return
+
     ctx = create_lexis_context()
     open_lexis_page(ctx)
     filter_language_dutch(ctx)
     filter_term_traffic_accidents(ctx)
-    iterate_results_for_range(ctx, start_date, end_date)
+    iterate_results_for_range(ctx, start_date, end_date, skip=skip)
 
 
 if __name__ == "__main__":
