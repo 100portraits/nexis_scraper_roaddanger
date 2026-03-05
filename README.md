@@ -22,87 +22,37 @@ Run all commands from the `data collection` directory.
 
 ### Files
 
-- `LexisNexis.py` – main Selenium scraper and downloader.
+- `LexisNexis.py` – main Selenium scraper and downloader (what you run).
 - `progress.csv` – per-day progress tracking.
-- `downloads/` – root folder where all downloaded files are stored (auto-created).
+- `downloads/` – where all downloaded files are stored (auto-created, grouped per day).
 
 ---
 
-### 1. Run the scraper
+### How to run it
 
-#### Full 2025 range (default)
+- **Always run from** the `data collection` folder.
+- Dates are **`DD-MM-YYYY`**, and a **start + end date are required**.
+
+Run:
 
 ```bash
 python LexisNexis.py
 ```
 
-Equivalent to:
-
-```bash
-python LexisNexis.py --start-date 01-01-2025 --end-date 31-12-2025
-```
-
-#### Custom date range
-
-Dates are **`DD-MM-YYYY`**:
-
-```bash
-python LexisNexis.py --start-date 01-03-2025 --end-date 15-03-2025
-```
-
-The script will, for each day in the range:
-
-- Open LexisNexis via the UvA portal.
-- Run the fixed search query:
-
-  ```text
-  (verkeersongeval or aanrijding or ongeluk or crash or botsing or verkeersongeluk)
-  ```
-
-- Filter:
-  - Language: Dutch.
-  - Timeline: that single day only.
-- Download **all “News” results** in batches of at most **250** documents:
-  - 1–250, 251–500, 501–N, … (as needed).
-- Wait for each batch’s “Downloaden is gereed” notification before continuing.
-- Update the row in `progress.csv` for that date.
-
----
-
-### 2. Download folders
-
-- All files are initially downloaded into `./downloads/`.
-- After each day finishes, any new files from that day are moved into a dated subfolder:
+You’ll then be prompted in the terminal:
 
 ```text
-downloads/
-  01-03-2025/
-    <downloaded files...>
-  02-03-2025/
-    <downloaded files...>
-  ...
+Enter start date (DD-MM-YYYY): 01-07-2024
+Enter end date (DD-MM-YYYY): 15-07-2024
 ```
 
-This keeps downloads grouped by date, regardless of LexisNexis’ internal filenames.
+For each day in the range the script:
 
----
-
-### 3. Parallel scraping (sharing the work)
-
-To bypass rate limits, multiple people can scrape **different date ranges** in parallel.  
-Example:
-
-- Person A:
-
-  ```bash
-  python LexisNexis.py --start-date 01-01-2025 --end-date 31-03-2025
-  ```
-
-- Person B:
-
-  ```bash
-  python LexisNexis.py --start-date 01-04-2025 --end-date 30-06-2025
-  ```
-
-Each run only touches its own date range; `progress.csv` and `downloads/` will reflect the combined coverage when results are merged.
+- Opens LexisNexis via the UvA portal and runs the fixed Dutch traffic-accident query.
+- Filters to Dutch language and that single day.
+- Downloads all “News” results in batches of up to **250** documents.
+- Respects a **daily cap of 2500 downloaded documents**:
+  - If today’s total (from `progress.csv`) plus the current day’s results would exceed 2500, it stops and tells you to wait until tomorrow.
+- Updates `progress.csv` for that date (marks it completed, fills counts + time, and stores today as `date_scraped`).
+- If some requested days are already completed, it offers to skip them; if everything in the range is completed, it exits without opening a browser.
 
