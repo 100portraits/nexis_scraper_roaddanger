@@ -2,6 +2,8 @@
 
 import argparse
 import csv
+import getpass
+import platform
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -25,6 +27,7 @@ SEARCH_QUERY = (
 )
 PROGRESS_CSV = Path("progress.csv")
 DOWNLOAD_ROOT = Path(__file__).parent / "downloads"
+SELECT_ALL_KEY = Keys.COMMAND if platform.system() == "Darwin" else Keys.CONTROL
 
 
 @dataclass
@@ -253,7 +256,7 @@ def filter_single_day(ctx: LexisContext, day: date) -> None:
     for el in (min_input, max_input):
         # Robust clear: select-all + delete, since plain .clear() may not work with masked inputs
         el.click()
-        el.send_keys(Keys.CONTROL, "a")
+        el.send_keys(SELECT_ALL_KEY, "a")
         el.send_keys(Keys.DELETE)
         el.send_keys(day_str)
 
@@ -285,17 +288,16 @@ def update_progress_for_day(
         return
 
     rows: list[dict[str, str]] = []
-    fieldnames = ["date", "completed", "num_docs", "num_downloaded", "time_taken", "date_scraped"]
+    fieldnames = ["date", "completed", "num_docs", "num_downloaded", "time_taken", "date_scraped", "user"]
 
     with PROGRESS_CSV.open(newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
-        if reader.fieldnames:
-            fieldnames = list(reader.fieldnames)
         for row in reader:
             rows.append(row)
 
     day_key = day.strftime("%d-%m-%Y")
     scraped_today = date.today().strftime("%d-%m-%Y")
+    user = getpass.getuser()
     updated = False
     for row in rows:
         if row.get("date") == day_key:
@@ -304,6 +306,7 @@ def update_progress_for_day(
             row["num_downloaded"] = str(num_downloaded)
             row["time_taken"] = f"{time_taken:.2f}"
             row["date_scraped"] = scraped_today
+            row["user"] = user
             updated = True
             break
 
@@ -316,6 +319,7 @@ def update_progress_for_day(
                 "num_downloaded": str(num_downloaded),
                 "time_taken": f"{time_taken:.2f}",
                 "date_scraped": scraped_today,
+                "user": user,
             }
         )
 
@@ -407,7 +411,7 @@ def set_download_modal_settings(ctx: LexisContext, start_idx: int, end_idx: int)
     )
     range_str = f"{start_idx}-{end_idx}"
     range_input.click()
-    range_input.send_keys(Keys.CONTROL, "a")
+    range_input.send_keys(SELECT_ALL_KEY, "a")
     range_input.send_keys(Keys.DELETE)
     range_input.send_keys(range_str)
 
@@ -531,15 +535,16 @@ def get_completed_days() -> set[date]:
 
 
 def get_downloaded_today() -> int:
-    """Sum num_downloaded for all rows where date_scraped matches today."""
+    """Sum num_downloaded for rows where date_scraped is today and user matches."""
     if not PROGRESS_CSV.exists():
         return 0
 
     today_str = date.today().strftime("%d-%m-%Y")
+    current_user = getpass.getuser()
     total = 0
     with PROGRESS_CSV.open(newline="", encoding="utf-8") as f:
         for row in csv.DictReader(f):
-            if row.get("date_scraped", "").strip() == today_str:
+            if row.get("date_scraped", "").strip() == today_str and row.get("user", "").strip() == current_user:
                 try:
                     total += int(row.get("num_downloaded", "0"))
                 except ValueError:
