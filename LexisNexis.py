@@ -627,16 +627,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--start-date",
         type=str,
-        default="01-01-2025",
-        help="Start date (inclusive) in DD-MM-YYYY format. Default: 01-01-2025",
+        default=None,
+        help="Start date (inclusive) in DD-MM-YYYY format.",
     )
     parser.add_argument(
         "--end-date",
         type=str,
-        default="31-12-2025",
-        help="End date (inclusive) in DD-MM-YYYY format. Default: 31-12-2025",
+        default=None,
+        help="End date (inclusive) in DD-MM-YYYY format.",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    if args.start_date is None:
+        args.start_date = input("Enter start date (DD-MM-YYYY): ").strip()
+    if args.end_date is None:
+        args.end_date = input("Enter end date (DD-MM-YYYY): ").strip()
+
+    return args
 
 
 def main() -> None:
