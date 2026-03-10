@@ -260,6 +260,12 @@ def filter_single_day(ctx: LexisContext, day: date) -> None:
         el.send_keys(Keys.DELETE)
         el.send_keys(day_str)
 
+    # Capture the current count before applying the date filter
+    count_selector = "ul.content-switcher li[data-actualresultscount]"
+    old_count = wait.until(
+        EC.presence_of_element_located((By.CSS_SELECTOR, count_selector))
+    ).get_attribute("data-actualresultscount")
+
     # Click the OK button to apply the date range
     ok_button = wait.until(
         EC.element_to_be_clickable(
@@ -268,8 +274,12 @@ def filter_single_day(ctx: LexisContext, day: date) -> None:
     )
     ok_button.click()
 
-    # Give the results a moment to refresh
-    sleep(3)
+    # Wait until the result count changes
+    WebDriverWait(driver, 20).until(
+        lambda d: d.find_element(By.CSS_SELECTOR, count_selector)
+        .get_attribute("data-actualresultscount")
+        != old_count
+    )
 
 
 DOWNLOAD_LIMIT = 250
