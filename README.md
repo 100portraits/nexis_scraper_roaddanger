@@ -56,3 +56,4 @@ For each day in the range the script:
 - Updates `progress.csv` for that date (marks it completed, fills counts + time, and stores today as `date_scraped`).
 - If some requested days are already completed, it offers to skip them; if everything in the range is completed, it exits without opening a browser.
 
+Committed from UvA AI Chat
